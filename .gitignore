@@ -1,0 +1,84 @@
+# ---------------------------------------------------------------
+# Datasets - NEVER commit these.
+# The dataset is rebuilt by model/build_dataset.py, so the script
+# belongs in Git and the 39 MB of images does not.
+# ---------------------------------------------------------------
+assistive_dataset/
+assistive_dataset.zip
+*.zip
+_work/
+_stage/
+local/
+dataset/
+data/raw/
+
+# ---------------------------------------------------------------
+# Large model files.
+# The small TFLite files ARE committed (see model/exported/).
+# The full Keras model is too big for Git - attach it to a
+# GitHub Release instead.
+# ---------------------------------------------------------------
+*.keras
+*.h5
+*.pb
+saved_model/
+checkpoints/
+best.keras
+
+# ---------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+.pytest_cache/
+
+# ---------------------------------------------------------------
+# Flutter / Dart
+# ---------------------------------------------------------------
+app/build/
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.packages
+app/ios/Pods/
+app/ios/.symlinks/
+app/android/.gradle/
+app/android/local.properties
+app/android/key.properties
+*.jks
+*.keystore
+
+# ---------------------------------------------------------------
+# Secrets and config - keep these out of a public repository
+# ---------------------------------------------------------------
+.env
+.env.*
+google-services.json
+GoogleService-Info.plist
+firebase_options.dart
+serviceAccountKey.json
+*.pem
+
+# ---------------------------------------------------------------
+# PlatformIO / Arduino (ESP32)
+# ---------------------------------------------------------------
+firmware/.pio/
+firmware/.vscode/
+*.elf
+*.bin.bak
+
+# ---------------------------------------------------------------
+# Editors and operating systems
+# ---------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
