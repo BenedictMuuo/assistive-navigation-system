@@ -1,0 +1,8 @@
+background
+bag
+chair
+door
+person
+stairs
+table
+wall
