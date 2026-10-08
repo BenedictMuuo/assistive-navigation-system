@@ -1,11 +1,16 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'firebase_options.dart';
 import 'screens/detection_screen.dart';
 import 'theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Connect to the Firebase project before anything else runs.
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // Portrait only. The image converter assumes the phone is held upright,
   // which is how it is carried when walking.
