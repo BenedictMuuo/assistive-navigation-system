@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
@@ -5,6 +7,7 @@ import '../theme.dart';
 import '../services/classifier.dart';
 import '../services/image_converter.dart';
 import '../services/prediction_smoother.dart';
+import '../services/speech_service.dart';
 
 /// Live camera view that classifies what is in front of the user.
 class DetectionScreen extends StatefulWidget {
@@ -22,6 +25,7 @@ class _DetectionScreenState extends State<DetectionScreen> {
 
   final Classifier _classifier = Classifier();
   final PredictionSmoother _smoother = PredictionSmoother();
+  final SpeechService _speech = SpeechService();
 
   CameraController? _camera;
   String? _error;
@@ -41,6 +45,7 @@ class _DetectionScreenState extends State<DetectionScreen> {
   Future<void> _setUp() async {
     try {
       await _classifier.load();
+      await _speech.init();
 
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
@@ -76,12 +81,17 @@ class _DetectionScreenState extends State<DetectionScreen> {
     if (_running) {
       await camera.stopImageStream();
       _smoother.reset();
+      await _speech.stop();
       setState(() {
         _running = false;
         _latest = null;
         _steady = null;
       });
+      // Pressing a button should never be silent for someone who cannot
+      // see the screen change.
+      await _speech.say('Detection stopped');
     } else {
+      await _speech.say('Detection started');
       await camera.startImageStream(_onFrame);
       setState(() => _running = true);
     }
@@ -99,6 +109,9 @@ class _DetectionScreenState extends State<DetectionScreen> {
       final input = ImageConverter.toModelInput(image, rotation);
       final prediction = _classifier.classify(input);
       final steady = _smoother.add(prediction.label, prediction.confidence);
+
+      // Speech decides for itself whether this is worth saying.
+      unawaited(_speech.update(steady));
 
       if (mounted) {
         setState(() {
@@ -120,6 +133,7 @@ class _DetectionScreenState extends State<DetectionScreen> {
       if (camera.value.isStreamingImages) camera.stopImageStream();
       camera.dispose();
     }
+    _speech.stop();
     _classifier.close();
     super.dispose();
   }
@@ -175,7 +189,7 @@ class _DetectionScreenState extends State<DetectionScreen> {
       return Center(
         child: Semantics(
           label: 'Loading camera and model',
-          child: CircularProgressIndicator(color: Colors.white),
+          child: const CircularProgressIndicator(color: Colors.white),
         ),
       );
     }
@@ -192,10 +206,10 @@ class _DetectionScreenState extends State<DetectionScreen> {
           ),
         ),
 
-        // Result panel. liveRegion makes TalkBack read it out whenever it
-        // changes, without the user having to move focus to it.
+        // Result panel. The app speaks results itself, so this is not a
+        // live region - otherwise TalkBack users would hear every result
+        // twice. TalkBack can still read it when the user touches it.
         Semantics(
-          liveRegion: true,
           label: _message,
           excludeSemantics: true,
           child: Container(
