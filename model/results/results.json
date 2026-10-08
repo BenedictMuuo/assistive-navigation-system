@@ -1,0 +1,192 @@
+{
+  "model": "MobileNetV3-Small",
+  "method": "transfer learning, two phases",
+  "input_size": 224,
+  "classes": [
+    "background",
+    "bag",
+    "chair",
+    "door",
+    "person",
+    "stairs",
+    "table",
+    "wall"
+  ],
+  "training_images": 2240,
+  "test_images": 480,
+  "val_accuracy": 0.8521,
+  "test_accuracy": 0.7854,
+  "inference_ms": 2.1,
+  "per_class": [
+    {
+      "class": "background",
+      "precision": 0.9836,
+      "recall": 1.0,
+      "f1": 0.9917,
+      "support": 60
+    },
+    {
+      "class": "bag",
+      "precision": 0.7458,
+      "recall": 0.7333,
+      "f1": 0.7395,
+      "support": 60
+    },
+    {
+      "class": "chair",
+      "precision": 0.5606,
+      "recall": 0.6167,
+      "f1": 0.5873,
+      "support": 60
+    },
+    {
+      "class": "door",
+      "precision": 0.8308,
+      "recall": 0.9,
+      "f1": 0.864,
+      "support": 60
+    },
+    {
+      "class": "person",
+      "precision": 0.7083,
+      "recall": 0.5667,
+      "f1": 0.6296,
+      "support": 60
+    },
+    {
+      "class": "stairs",
+      "precision": 0.8929,
+      "recall": 0.8333,
+      "f1": 0.8621,
+      "support": 60
+    },
+    {
+      "class": "table",
+      "precision": 0.7018,
+      "recall": 0.6667,
+      "f1": 0.6838,
+      "support": 60
+    },
+    {
+      "class": "wall",
+      "precision": 0.8529,
+      "recall": 0.9667,
+      "f1": 0.9062,
+      "support": 60
+    }
+  ],
+  "confusion_matrix": [
+    [
+      60,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      44,
+      4,
+      0,
+      6,
+      2,
+      3,
+      1
+    ],
+    [
+      0,
+      5,
+      37,
+      1,
+      3,
+      4,
+      10,
+      0
+    ],
+    [
+      0,
+      0,
+      2,
+      54,
+      0,
+      0,
+      0,
+      4
+    ],
+    [
+      0,
+      8,
+      9,
+      4,
+      34,
+      0,
+      4,
+      1
+    ],
+    [
+      1,
+      1,
+      2,
+      3,
+      0,
+      50,
+      0,
+      3
+    ],
+    [
+      0,
+      1,
+      12,
+      1,
+      5,
+      0,
+      40,
+      1
+    ],
+    [
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      0,
+      58
+    ]
+  ],
+  "thresholds": [
+    {
+      "threshold": 0.0,
+      "coverage": 1.0,
+      "accuracy": 0.7854
+    },
+    {
+      "threshold": 0.5,
+      "coverage": 0.9229,
+      "accuracy": 0.8194
+    },
+    {
+      "threshold": 0.6,
+      "coverage": 0.825,
+      "accuracy": 0.8434
+    },
+    {
+      "threshold": 0.7,
+      "coverage": 0.7396,
+      "accuracy": 0.8845
+    },
+    {
+      "threshold": 0.8,
+      "coverage": 0.6292,
+      "accuracy": 0.9272
+    },
+    {
+      "threshold": 0.9,
+      "coverage": 0.5167,
+      "accuracy": 0.9556
+    }
+  ]
+}
