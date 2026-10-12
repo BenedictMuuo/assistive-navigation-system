@@ -117,3 +117,12 @@ Dataset sources and licences are documented in
 
 Branch naming, commit message format and the pull request process are set out
 in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## Firebase setup
+
+The Firebase config files are not committed, because this repository is public. To build the app, sign in with `firebase login` and run this from the `app` folder:
+
+```n flutterfire configure --project=assistive-navigation-8c5ad --platforms=android
+```
+
+That regenerates `lib/firebase_options.dart` and `android/app/google-services.json`.
