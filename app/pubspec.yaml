@@ -23,6 +23,8 @@ dependencies:
   firebase_core: ^4.7.0
   firebase_auth: ^6.4.0
   cloud_firestore: ^6.3.0
+  geolocator: 13.0.4
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:
@@ -35,3 +37,5 @@ flutter:
   assets:
     - assets/model/model_fp16.tflite
     - assets/model/labels.txt
+dependency_overrides:
+  geolocator_android: 4.6.1

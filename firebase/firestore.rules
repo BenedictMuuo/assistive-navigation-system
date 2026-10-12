@@ -1,0 +1,55 @@
+rules_version = '2';
+
+// Security rules for the assistive navigation app.
+//
+// Principle: nobody can read anything they have no reason to see.
+//   - A profile is visible only to its owner.
+//   - An SOS alert is visible only to the user who sent it and to the
+//     caregiver it was addressed to.
+//   - A caregiver can mark an alert handled, and change nothing else.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myEmail() {
+      return request.auth.token.email;
+    }
+
+    // users/{uid}: name, email, role, caregiverEmail
+    match /users/{uid} {
+      allow read, update, delete: if signedIn() && request.auth.uid == uid;
+
+      // On creation the role must be one of the two known roles.
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role in ['user', 'caregiver'];
+    }
+
+    // alerts/{alertId}: one SOS alert
+    match /alerts/{alertId} {
+
+      // Only the signed-in user can send an alert, and only as themselves.
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'open'
+        && request.resource.data.caregiverEmail is string;
+
+      allow read: if signedIn()
+        && (resource.data.userId == request.auth.uid
+            || resource.data.caregiverEmail == myEmail());
+
+      // The addressed caregiver may mark it handled - nothing else.
+      allow update: if signedIn()
+        && resource.data.caregiverEmail == myEmail()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'acknowledgedAt'])
+        && request.resource.data.status == 'acknowledged';
+
+      // Alerts are a record; nobody deletes them from the app.
+      allow delete: if false;
+    }
+  }
+}
