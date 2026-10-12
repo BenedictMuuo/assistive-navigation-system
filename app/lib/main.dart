@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'firebase_options.dart';
-import 'screens/detection_screen.dart';
+import 'screens/auth_gate.dart';
 import 'theme.dart';
 
 Future<void> main() async {
@@ -31,7 +31,9 @@ class AssistiveNavApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: AppColours.primary),
         useMaterial3: true,
       ),
-      home: const DetectionScreen(),
+      // Shows sign-in, the user's home or the caregiver's alerts,
+      // depending on who is signed in.
+      home: const AuthGate(),
     );
   }
 }
