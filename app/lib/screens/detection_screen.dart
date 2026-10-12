@@ -251,6 +251,9 @@ class _DetectionScreenState extends State<DetectionScreen> {
             child: Semantics(
               button: true,
               label: _running ? 'Stop detection' : 'Start detection',
+              // Without this, excludeSemantics hides the button's tap
+              // from TalkBack and a double-tap does nothing.
+              onTap: _toggle,
               excludeSemantics: true,
               child: ElevatedButton(
                 onPressed: _toggle,
