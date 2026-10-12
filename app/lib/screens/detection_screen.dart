@@ -5,11 +5,16 @@ import 'package:flutter/material.dart';
 
 import '../theme.dart';
 import '../services/classifier.dart';
+import '../services/distance/mock_distance_source.dart';
+import '../services/haptics.dart';
 import '../services/image_converter.dart';
 import '../services/prediction_smoother.dart';
+import '../services/risk/risk_alert_policy.dart';
+import '../services/risk/risk_rules.dart';
 import '../services/speech_service.dart';
 
-/// Live camera view that classifies what is in front of the user.
+/// Live camera view: classifies what is ahead, combines it with distance,
+/// and warns the user according to risk.
 class DetectionScreen extends StatefulWidget {
   const DetectionScreen({super.key});
 
@@ -27,6 +32,15 @@ class _DetectionScreenState extends State<DetectionScreen> {
   final PredictionSmoother _smoother = PredictionSmoother();
   final SpeechService _speech = SpeechService();
 
+  // Distance and risk. The mock stands in for the ESP32 ultrasonic unit.
+  final MockDistanceSource _distance = MockDistanceSource();
+  final DistanceBander _bander = DistanceBander();
+  final RiskAlertPolicy _riskPolicy = RiskAlertPolicy();
+  StreamSubscription<double?>? _distanceSub;
+  double? _metres;
+  DistanceBand _band = DistanceBand.unknown;
+  bool _sensorOn = true;
+
   CameraController? _camera;
   String? _error;
   bool _running = false;
@@ -35,6 +49,7 @@ class _DetectionScreenState extends State<DetectionScreen> {
 
   Prediction? _latest; // raw, this frame
   String? _steady; // smoothed, what the user is told
+  RiskLevel? _risk; // null while unsure or in camera-only mode
 
   @override
   void initState() {
@@ -46,6 +61,9 @@ class _DetectionScreenState extends State<DetectionScreen> {
     try {
       await _classifier.load();
       await _speech.init();
+
+      _distanceSub = _distance.readings.listen(_onDistance);
+      await _distance.start();
 
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
@@ -74,6 +92,15 @@ class _DetectionScreenState extends State<DetectionScreen> {
     }
   }
 
+  void _onDistance(double? metres) {
+    final band = _bander.update(metres);
+    if (!mounted) return;
+    setState(() {
+      _metres = metres;
+      _band = band;
+    });
+  }
+
   Future<void> _toggle() async {
     final camera = _camera;
     if (camera == null) return;
@@ -81,11 +108,13 @@ class _DetectionScreenState extends State<DetectionScreen> {
     if (_running) {
       await camera.stopImageStream();
       _smoother.reset();
+      _riskPolicy.reset();
       await _speech.stop();
       setState(() {
         _running = false;
         _latest = null;
         _steady = null;
+        _risk = null;
       });
       // Pressing a button should never be silent for someone who cannot
       // see the screen change.
@@ -95,6 +124,18 @@ class _DetectionScreenState extends State<DetectionScreen> {
       await camera.startImageStream(_onFrame);
       setState(() => _running = true);
     }
+  }
+
+  /// Simulates the sensor disconnecting and reconnecting, to demonstrate
+  /// that the app falls back to camera-only warnings.
+  Future<void> _toggleSensor(bool on) async {
+    _distance.setConnected(on);
+    _riskPolicy.reset();
+    _speech.policy.reset();
+    setState(() => _sensorOn = on);
+    await _speech.say(on
+        ? 'Distance sensor connected.'
+        : 'Distance sensor disconnected. Using camera only.');
   }
 
   void _onFrame(CameraImage image) {
@@ -110,19 +151,41 @@ class _DetectionScreenState extends State<DetectionScreen> {
       final prediction = _classifier.classify(input);
       final steady = _smoother.add(prediction.label, prediction.confidence);
 
-      // Speech decides for itself whether this is worth saying.
-      unawaited(_speech.update(steady));
+      RiskLevel? risk;
+      if (_band == DistanceBand.unknown) {
+        // No distance: camera-only mode, using the speech rules alone.
+        unawaited(_speech.update(steady));
+      } else if (steady != null) {
+        risk = RiskTable.assess(steady, _band);
+        final alert = _riskPolicy.next(
+          steady,
+          risk,
+          now,
+          speaking: _speech.isSpeaking,
+        );
+        unawaited(_deliver(alert));
+      }
 
       if (mounted) {
         setState(() {
           _latest = prediction;
           _steady = steady;
+          _risk = risk;
         });
       }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
       _busy = false;
+    }
+  }
+
+  Future<void> _deliver(RiskAlert alert) async {
+    if (alert.isSilent) return;
+    unawaited(Haptics.play(alert.haptic));
+    final phrase = alert.phrase;
+    if (phrase != null) {
+      await _speech.announce(phrase, interrupt: alert.interrupt);
     }
   }
 
@@ -133,28 +196,66 @@ class _DetectionScreenState extends State<DetectionScreen> {
       if (camera.value.isStreamingImages) camera.stopImageStream();
       camera.dispose();
     }
+    _distanceSub?.cancel();
+    _distance.dispose();
     _speech.stop();
     _classifier.close();
     super.dispose();
   }
 
-  /// What the user is told, in plain words.
+  // ---------------------------------------------------------------------
+  // What the user is shown and told
+  // ---------------------------------------------------------------------
+
+  String _name(String label) =>
+      '${label[0].toUpperCase()}${label.substring(1)}';
+
   String get _message {
     if (!_running) return 'Detection off';
     final steady = _steady;
     if (steady == null) return 'Checking…';
     if (steady == 'background') return 'Path clear';
-    return '${steady[0].toUpperCase()}${steady.substring(1)} ahead';
+    final metres = _metres;
+    if (_band != DistanceBand.unknown && metres != null) {
+      return '${_name(steady)} · ${metres.toStringAsFixed(1)} m';
+    }
+    return '${_name(steady)} ahead';
   }
 
+  String? get _riskText => switch (_risk) {
+        RiskLevel.high => 'HIGH RISK',
+        RiskLevel.medium => 'MEDIUM RISK',
+        RiskLevel.low => 'LOW RISK',
+        null => null,
+      };
+
   Color get _panelColour {
-    if (!_running) return Colors.black87;
-    final steady = _steady;
-    if (steady == null) return Colors.black87;
-    if (steady == 'background') return AppColours.active;
-    if (steady == 'stairs') return AppColours.danger;
-    return AppColours.primary;
+    if (!_running || _steady == null) return Colors.black87;
+    switch (_risk) {
+      case RiskLevel.high:
+        return AppColours.danger;
+      case RiskLevel.medium:
+        return AppColours.caution;
+      case RiskLevel.low:
+        return AppColours.active;
+      case null:
+        // Camera-only mode: no distance, so no graded risk.
+        if (_steady == 'background') return AppColours.active;
+        if (_steady == 'stairs') return AppColours.danger;
+        return AppColours.primary;
+    }
   }
+
+  /// Black on the yellow caution colour; white on everything else.
+  Color get _panelText =>
+      _panelColour == AppColours.caution ? Colors.black : Colors.white;
+
+  String get _bandText => switch (_band) {
+        DistanceBand.near => 'near',
+        DistanceBand.medium => 'medium',
+        DistanceBand.far => 'far',
+        DistanceBand.unknown => 'no reading',
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -195,6 +296,7 @@ class _DetectionScreenState extends State<DetectionScreen> {
     }
 
     final latest = _latest;
+    final riskText = _riskText;
 
     return Column(
       children: [
@@ -206,35 +308,48 @@ class _DetectionScreenState extends State<DetectionScreen> {
           ),
         ),
 
-        // Result panel. The app speaks results itself, so this is not a
-        // live region - otherwise TalkBack users would hear every result
-        // twice. TalkBack can still read it when the user touches it.
+        // Result panel. The app speaks and vibrates for itself, so this is
+        // not a live region - otherwise TalkBack users would hear every
+        // result twice. TalkBack still reads it when touched.
         Semantics(
-          label: _message,
+          label: riskText == null ? _message : '$_message. $riskText',
           excludeSemantics: true,
           child: Container(
             width: double.infinity,
             color: _panelColour,
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
             child: Column(
               children: [
                 Text(
                   _message,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 32,
+                  style: TextStyle(
+                    color: _panelText,
+                    fontSize: 30,
                     fontWeight: FontWeight.bold,
                   ),
                   textAlign: TextAlign.center,
                 ),
+                if (riskText != null)
+                  Text(
+                    riskText,
+                    style: TextStyle(
+                      color: _panelText,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
                 if (latest != null) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   // Raw output, for development and testing only.
                   Text(
                     'raw: ${latest.label} '
                     '${(latest.confidence * 100).toStringAsFixed(0)}%  ·  '
                     '${latest.inferenceMs} ms',
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    style: TextStyle(
+                      color: _panelText.withOpacity(0.75),
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ],
@@ -242,9 +357,11 @@ class _DetectionScreenState extends State<DetectionScreen> {
           ),
         ),
 
+        _simulationPanel(),
+
         // Start and stop. Large target, well above the 48dp minimum.
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: SizedBox(
             width: double.infinity,
             height: 72,
@@ -272,6 +389,54 @@ class _DetectionScreenState extends State<DetectionScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// Controls for the simulated distance sensor. Clearly labelled as a
+  /// simulation, so nobody watching a demo mistakes it for real hardware.
+  Widget _simulationPanel() {
+    final metres = _metres;
+    final reading = _sensorOn && metres != null
+        ? '${metres.toStringAsFixed(2)} m ($_bandText)'
+        : 'disconnected';
+
+    return Container(
+      color: const Color(0xFF1E1E1E),
+      padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Simulated sensor: $reading',
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+              ),
+              const Text('Sensor',
+                  style: TextStyle(color: Colors.white70, fontSize: 14)),
+              Switch(
+                value: _sensorOn,
+                onChanged: _toggleSensor,
+                activeColor: AppColours.caution,
+              ),
+            ],
+          ),
+          Slider(
+            value: _distance.target,
+            min: MockDistanceSource.minMetres,
+            max: MockDistanceSource.maxMetres,
+            divisions: 48,
+            label: '${_distance.target.toStringAsFixed(1)} m',
+            semanticFormatterCallback: (v) =>
+                'Simulated distance ${v.toStringAsFixed(1)} metres',
+            onChanged: _sensorOn
+                ? (v) => setState(() => _distance.setDistance(v))
+                : null,
+          ),
+        ],
+      ),
     );
   }
 }
