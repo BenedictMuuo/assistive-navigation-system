@@ -9,6 +9,14 @@ rootProject.buildDir = "../build"
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
+// flutter_blue_plus_android reads flutter.compileSdkVersion, which plugin
+// projects only get from newer Flutter versions than ours (3.24). Give it
+// the value here instead of upgrading Flutter. 35 matches app/build.gradle.
+subprojects { p ->
+    if (p.name == "flutter_blue_plus_android") {
+        p.ext.flutter = [compileSdkVersion: 35]
+    }
+}
 subprojects {
     project.evaluationDependsOn(":app")
 }
