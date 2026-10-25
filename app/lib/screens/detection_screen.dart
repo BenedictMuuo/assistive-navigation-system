@@ -69,8 +69,6 @@ class _DetectionScreenState extends State<DetectionScreen> {
       await _classifier.load();
       await _speech.init();
 
-      await _startDistance();
-
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
         throw StateError('No camera found on this device.');
@@ -93,6 +91,11 @@ class _DetectionScreenState extends State<DetectionScreen> {
         return;
       }
       setState(() => _camera = controller);
+
+      // Only start Bluetooth once the camera is ready. Both need a
+      // permission, and Android refuses the second request if two pop-ups
+      // are asked for at the same time.
+      await _startDistance();
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
