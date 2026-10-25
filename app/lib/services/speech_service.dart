@@ -65,6 +65,14 @@ class SpeechService {
     }
   }
 
+  /// Speaks a risk warning, cutting off current speech if [interrupt].
+  Future<void> announce(String phrase, {required bool interrupt}) async {
+    if (!_ready) return;
+    if (interrupt) await _tts.stop();
+    _speaking = true;
+    await _tts.speak(phrase);
+  }
+
   /// Speaks a one-off message, such as "Detection started".
   Future<void> say(String text) async {
     if (!_ready) return;
