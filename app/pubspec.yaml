@@ -26,6 +26,10 @@ dependencies:
   geolocator: 13.0.4
   url_launcher: ^6.3.1
 
+  # Bluetooth Low Energy link to the ESP32 wearable sensor.
+  # 2.3.4 or newer is needed for License.nonprofit in connect().
+  flutter_blue_plus: ^2.3.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

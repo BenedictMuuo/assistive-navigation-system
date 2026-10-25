@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import '../theme.dart';
 import '../services/classifier.dart';
+import '../services/distance/ble_distance_source.dart';
+import '../services/distance/distance_source.dart';
 import '../services/distance/mock_distance_source.dart';
 import '../services/haptics.dart';
 import '../services/image_converter.dart';
@@ -32,14 +34,19 @@ class _DetectionScreenState extends State<DetectionScreen> {
   final PredictionSmoother _smoother = PredictionSmoother();
   final SpeechService _speech = SpeechService();
 
-  // Distance and risk. The mock stands in for the ESP32 ultrasonic unit.
-  final MockDistanceSource _distance = MockDistanceSource();
+  // Distance and risk. Readings come from the ESP32 ultrasonic unit over
+  // Bluetooth, or from the simulated sensor for demonstrations. The rest of
+  // the screen only sees a DistanceSource and does not know which.
+  DistanceSource _distance = BleDistanceSource();
   final DistanceBander _bander = DistanceBander();
   final RiskAlertPolicy _riskPolicy = RiskAlertPolicy();
   StreamSubscription<double?>? _distanceSub;
   double? _metres;
   DistanceBand _band = DistanceBand.unknown;
-  bool _sensorOn = true;
+  bool _sensorOn = true; // simulated sensor's on/off switch
+  bool _sensorLive = false; // readings currently arriving
+
+  bool get _simulated => _distance is MockDistanceSource;
 
   CameraController? _camera;
   String? _error;
@@ -62,8 +69,7 @@ class _DetectionScreenState extends State<DetectionScreen> {
       await _classifier.load();
       await _speech.init();
 
-      _distanceSub = _distance.readings.listen(_onDistance);
-      await _distance.start();
+      await _startDistance();
 
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
@@ -92,7 +98,57 @@ class _DetectionScreenState extends State<DetectionScreen> {
     }
   }
 
+  Future<void> _startDistance() async {
+    final source = _distance;
+    _distanceSub = source.readings.listen(_onDistance);
+    if (source is BleDistanceSource) {
+      source.status.addListener(_onSensorStatus);
+    }
+    await source.start();
+  }
+
+  /// Rebuilds the sensor panel when the Bluetooth status text changes.
+  void _onSensorStatus() {
+    if (mounted) setState(() {});
+  }
+
+  /// Switches between the real sensor and the simulated one.
+  Future<void> _useSimulated(bool simulated) async {
+    if (simulated == _simulated) return;
+    final old = _distance;
+    await _distanceSub?.cancel();
+    _distanceSub = null;
+    if (old is BleDistanceSource) old.status.removeListener(_onSensorStatus);
+    await old.dispose();
+
+    _bander.update(null);
+    _riskPolicy.reset();
+    _speech.policy.reset();
+    setState(() {
+      _distance = simulated ? MockDistanceSource() : BleDistanceSource();
+      _metres = null;
+      _band = DistanceBand.unknown;
+      _sensorOn = true;
+      _sensorLive = false;
+    });
+    await _speech.say(
+        simulated ? 'Using simulated sensor.' : 'Using wearable sensor.');
+    await _startDistance();
+  }
+
   void _onDistance(double? metres) {
+    // Tell the user when the sensor comes and goes, so they know whether
+    // warnings include distance or come from the camera alone.
+    final live = metres != null;
+    if (live != _sensorLive) {
+      _sensorLive = live;
+      _riskPolicy.reset();
+      _speech.policy.reset();
+      unawaited(_speech.say(live
+          ? 'Distance sensor connected.'
+          : 'Distance sensor disconnected. Using camera only.'));
+    }
+
     final band = _bander.update(metres);
     if (!mounted) return;
     setState(() {
@@ -127,15 +183,13 @@ class _DetectionScreenState extends State<DetectionScreen> {
   }
 
   /// Simulates the sensor disconnecting and reconnecting, to demonstrate
-  /// that the app falls back to camera-only warnings.
-  Future<void> _toggleSensor(bool on) async {
-    _distance.setConnected(on);
-    _riskPolicy.reset();
-    _speech.policy.reset();
+  /// that the app falls back to camera-only warnings. The spoken
+  /// announcement comes from [_onDistance], as it does for the real sensor.
+  void _toggleSensor(bool on) {
+    final source = _distance;
+    if (source is! MockDistanceSource) return;
+    source.setConnected(on);
     setState(() => _sensorOn = on);
-    await _speech.say(on
-        ? 'Distance sensor connected.'
-        : 'Distance sensor disconnected. Using camera only.');
   }
 
   void _onFrame(CameraImage image) {
@@ -197,7 +251,11 @@ class _DetectionScreenState extends State<DetectionScreen> {
       camera.dispose();
     }
     _distanceSub?.cancel();
-    _distance.dispose();
+    final source = _distance;
+    if (source is BleDistanceSource) {
+      source.status.removeListener(_onSensorStatus);
+    }
+    source.dispose();
     _speech.stop();
     _classifier.close();
     super.dispose();
@@ -357,7 +415,7 @@ class _DetectionScreenState extends State<DetectionScreen> {
           ),
         ),
 
-        _simulationPanel(),
+        _sensorPanel(),
 
         // Start and stop. Large target, well above the 48dp minimum.
         Padding(
@@ -392,13 +450,24 @@ class _DetectionScreenState extends State<DetectionScreen> {
     );
   }
 
-  /// Controls for the simulated distance sensor. Clearly labelled as a
-  /// simulation, so nobody watching a demo mistakes it for real hardware.
-  Widget _simulationPanel() {
+  /// Shows where distance readings come from, and lets a demonstrator
+  /// switch to the simulated sensor. The simulation is clearly labelled, so
+  /// nobody watching a demo mistakes it for real hardware.
+  Widget _sensorPanel() {
+    const label = TextStyle(color: Colors.white70, fontSize: 14);
     final metres = _metres;
-    final reading = _sensorOn && metres != null
+    final reading = metres != null
         ? '${metres.toStringAsFixed(2)} m ($_bandText)'
-        : 'disconnected';
+        : 'no reading';
+
+    final source = _distance;
+    final String heading;
+    if (source is BleDistanceSource) {
+      heading = 'Wearable sensor: ${source.status.value}'
+          '${source.isConnected ? ' · $reading' : ''}';
+    } else {
+      heading = 'Simulated sensor: ${_sensorOn ? reading : 'disconnected'}';
+    }
 
     return Container(
       color: const Color(0xFF1E1E1E),
@@ -408,33 +477,42 @@ class _DetectionScreenState extends State<DetectionScreen> {
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  'Simulated sensor: $reading',
-                  style: const TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ),
-              const Text('Sensor',
-                  style: TextStyle(color: Colors.white70, fontSize: 14)),
+              Expanded(child: Text(heading, style: label)),
+              const Text('Simulate', style: label),
               Switch(
-                value: _sensorOn,
-                onChanged: _toggleSensor,
+                value: _simulated,
+                onChanged: _useSimulated,
                 activeColor: AppColours.caution,
               ),
             ],
           ),
-          Slider(
-            value: _distance.target,
-            min: MockDistanceSource.minMetres,
-            max: MockDistanceSource.maxMetres,
-            divisions: 48,
-            label: '${_distance.target.toStringAsFixed(1)} m',
-            semanticFormatterCallback: (v) =>
-                'Simulated distance ${v.toStringAsFixed(1)} metres',
-            onChanged: _sensorOn
-                ? (v) => setState(() => _distance.setDistance(v))
-                : null,
-          ),
+          if (source is MockDistanceSource) ...[
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('Simulated sensor connected', style: label),
+                ),
+                Switch(
+                  value: _sensorOn,
+                  onChanged: _toggleSensor,
+                  activeColor: AppColours.caution,
+                ),
+              ],
+            ),
+            Slider(
+              value: source.target,
+              min: MockDistanceSource.minMetres,
+              max: MockDistanceSource.maxMetres,
+              divisions: 48,
+              label: '${source.target.toStringAsFixed(1)} m',
+              semanticFormatterCallback: (v) =>
+                  'Simulated distance ${v.toStringAsFixed(1)} metres',
+              onChanged: _sensorOn
+                  ? (v) => setState(() => source.setDistance(v))
+                  : null,
+            ),
+          ] else
+            const SizedBox(height: 8),
         ],
       ),
     );
