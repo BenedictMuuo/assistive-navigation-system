@@ -97,8 +97,29 @@ class _DetectionScreenState extends State<DetectionScreen> {
       // are asked for at the same time.
       await _startDistance();
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      final message = _explain(e);
+      if (mounted) setState(() => _error = message);
+      try {
+        await _speech.say(message);
+      } catch (_) {
+        // Speech itself failed to start; the message is still on screen.
+      }
     }
+  }
+
+  /// Turns a start-up failure into plain words the user can act on, rather
+  /// than a technical exception they cannot see or understand.
+  String _explain(Object e) {
+    if (e is CameraException) {
+      if (e.code.startsWith('CameraAccess')) {
+        return 'The camera permission is off. Open your phone settings, '
+            'then Apps, then assistive nav, then Permissions, and allow '
+            'the camera. Then open this screen again.';
+      }
+      return 'The camera could not start. Close the app and try again.';
+    }
+    if (e is StateError) return e.message;
+    return 'Detection could not start. Close the app and try again.';
   }
 
   Future<void> _startDistance() async {
@@ -134,8 +155,8 @@ class _DetectionScreenState extends State<DetectionScreen> {
       _sensorOn = true;
       _sensorLive = false;
     });
-    await _speech.say(
-        simulated ? 'Using simulated sensor.' : 'Using wearable sensor.');
+    await _speech
+        .say(simulated ? 'Using simulated sensor.' : 'Using wearable sensor.');
     await _startDistance();
   }
 
@@ -337,10 +358,13 @@ class _DetectionScreenState extends State<DetectionScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(
-            'Something went wrong:\n\n$error',
-            style: const TextStyle(color: Colors.white, fontSize: 18),
-            textAlign: TextAlign.center,
+          child: Semantics(
+            liveRegion: true,
+            child: Text(
+              error,
+              style: const TextStyle(color: Colors.white, fontSize: 20),
+              textAlign: TextAlign.center,
+            ),
           ),
         ),
       );
@@ -481,26 +505,36 @@ class _DetectionScreenState extends State<DetectionScreen> {
           Row(
             children: [
               Expanded(child: Text(heading, style: label)),
-              const Text('Simulate', style: label),
-              Switch(
-                value: _simulated,
-                onChanged: _useSimulated,
-                activeColor: AppColours.caution,
+              // Merged so TalkBack reads "Simulate, switch, off" instead of
+              // an unlabelled switch.
+              MergeSemantics(
+                child: Row(
+                  children: [
+                    const Text('Simulate', style: label),
+                    Switch(
+                      value: _simulated,
+                      onChanged: _useSimulated,
+                      activeColor: AppColours.caution,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
           if (source is MockDistanceSource) ...[
-            Row(
-              children: [
-                const Expanded(
-                  child: Text('Simulated sensor connected', style: label),
-                ),
-                Switch(
-                  value: _sensorOn,
-                  onChanged: _toggleSensor,
-                  activeColor: AppColours.caution,
-                ),
-              ],
+            MergeSemantics(
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text('Simulated sensor connected', style: label),
+                  ),
+                  Switch(
+                    value: _sensorOn,
+                    onChanged: _toggleSensor,
+                    activeColor: AppColours.caution,
+                  ),
+                ],
+              ),
             ),
             Slider(
               value: source.target,

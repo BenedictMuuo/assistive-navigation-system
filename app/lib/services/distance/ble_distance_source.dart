@@ -26,8 +26,7 @@ class BleDistanceSource implements DistanceSource {
 
   static const String deviceName = 'AssistNav-Wearable';
   static final Guid serviceUuid = Guid('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
-  static final Guid distanceUuid =
-      Guid('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
+  static final Guid distanceUuid = Guid('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
 
   /// The ESP32 sends "DIST:-1" when no echo comes back, which means nothing
   /// is in range. That is reported as this distance (the far band), so a

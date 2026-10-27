@@ -21,6 +21,7 @@ class _SignInScreenState extends State<SignInScreen> {
   final _password = TextEditingController();
 
   bool _registering = false;
+  bool _showPassword = false;
   bool _busy = false;
   UserRole _role = UserRole.user;
   String? _error;
@@ -93,8 +94,21 @@ class _SignInScreenState extends State<SignInScreen> {
             ],
             _field(_email, 'Email address', TextInputType.emailAddress),
             const SizedBox(height: 16),
-            _field(_password, 'Password', TextInputType.visiblePassword,
-                obscure: true),
+            _field(
+              _password,
+              'Password',
+              TextInputType.visiblePassword,
+              obscure: !_showPassword,
+              // Lets a low-vision user check what they typed.
+              suffix: IconButton(
+                icon: Icon(
+                  _showPassword ? Icons.visibility : Icons.visibility_off,
+                  size: 28,
+                ),
+                tooltip: _showPassword ? 'Hide password' : 'Show password',
+                onPressed: () => setState(() => _showPassword = !_showPassword),
+              ),
+            ),
             if (_registering) ...[
               const SizedBox(height: 20),
               const Text(
@@ -167,6 +181,7 @@ class _SignInScreenState extends State<SignInScreen> {
     String label,
     TextInputType type, {
     bool obscure = false,
+    Widget? suffix,
   }) {
     return TextField(
       controller: controller,
@@ -177,6 +192,7 @@ class _SignInScreenState extends State<SignInScreen> {
       style: const TextStyle(fontSize: 20),
       decoration: InputDecoration(
         labelText: label,
+        suffixIcon: suffix,
         border: const OutlineInputBorder(),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
