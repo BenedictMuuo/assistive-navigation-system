@@ -8,6 +8,9 @@ import '../theme.dart';
 /// actions are made big enough to hit without aiming. The screen reader
 /// label is set explicitly, so TalkBack reads exactly [semanticLabel]
 /// rather than guessing from the icon and text.
+///
+/// [height] is a minimum, not a fixed size. Many low-vision users set a
+/// large system font, and a fixed-height button would cut the text off.
 class BigButton extends StatelessWidget {
   const BigButton({
     super.key,
@@ -32,44 +35,47 @@ class BigButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: height,
-      child: Semantics(
-        button: true,
-        enabled: onPressed != null,
-        label: semanticLabel ?? label,
-        // The tap must live on this node: excludeSemantics hides the
-        // button's own tap action from TalkBack, so without this a
-        // double-tap would do nothing.
-        onTap: onPressed,
-        excludeSemantics: true,
-        child: ElevatedButton(
-          onPressed: onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: colour,
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: Colors.grey.shade400,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: height),
+        child: Semantics(
+          button: true,
+          enabled: onPressed != null,
+          label: semanticLabel ?? label,
+          // The tap must live on this node: excludeSemantics hides the
+          // button's own tap action from TalkBack, so without this a
+          // double-tap would do nothing.
+          onTap: onPressed,
+          excludeSemantics: true,
+          child: ElevatedButton(
+            onPressed: onPressed,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              backgroundColor: colour,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: Colors.grey.shade400,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: fontSize + 8),
-                const SizedBox(width: 12),
-              ],
-              Flexible(
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: fontSize,
-                    fontWeight: FontWeight.bold,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: fontSize + 8),
+                  const SizedBox(width: 12),
+                ],
+                Flexible(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: fontSize,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

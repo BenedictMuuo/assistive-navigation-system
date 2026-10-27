@@ -38,7 +38,8 @@ class Classifier {
 
   Future<void> load() async {
     final options = InterpreterOptions()..threads = 2;
-    final interpreter = await Interpreter.fromAsset(modelAsset, options: options);
+    final interpreter =
+        await Interpreter.fromAsset(modelAsset, options: options);
 
     final raw = await rootBundle.loadString(labelsAsset);
     // trim() also strips the \r that Windows line endings leave behind.

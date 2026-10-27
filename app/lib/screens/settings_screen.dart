@@ -108,9 +108,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _message!,
                   style: TextStyle(
                     fontSize: 18,
-                    color: _messageIsError
-                        ? AppColours.danger
-                        : AppColours.active,
+                    color:
+                        _messageIsError ? AppColours.danger : AppColours.active,
                   ),
                 ),
               ),

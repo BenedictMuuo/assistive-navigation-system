@@ -168,6 +168,12 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
 
   Widget _card(SosAlert a, DateTime now) {
     final age = describeAge(a.createdAt, now);
+    final spokenWhere = !a.hasLocation
+        ? 'Location not available'
+        : a.accuracyMetres == null
+            ? 'Location received. Use Open map to see it.'
+            : 'Location received, accurate to about '
+                '${a.accuracyMetres!.round()} metres. Use Open map to see it.';
     final where = a.hasLocation
         ? '${a.latitude!.toStringAsFixed(5)}, '
             '${a.longitude!.toStringAsFixed(5)}'
@@ -187,24 +193,37 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(Icons.sos,
-                    color: a.isOpen ? AppColours.danger : Colors.grey,
-                    size: 32),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text('SOS from ${a.userName}',
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.bold)),
-                ),
-              ],
+            // Read by TalkBack as one item: who, when, status and where,
+            // rather than four separate swipes. The buttons stay separate.
+            MergeSemantics(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      ExcludeSemantics(
+                        child: Icon(Icons.sos,
+                            color: a.isOpen ? AppColours.danger : Colors.grey,
+                            size: 32),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text('SOS from ${a.userName}',
+                            style: const TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text('$age  ·  ${a.isOpen ? 'Needs attention' : 'Handled'}',
+                      style: const TextStyle(fontSize: 16)),
+                  const SizedBox(height: 4),
+                  Text(where,
+                      semanticsLabel: spokenWhere,
+                      style: const TextStyle(fontSize: 16)),
+                ],
+              ),
             ),
-            const SizedBox(height: 6),
-            Text('$age  ·  ${a.isOpen ? 'Needs attention' : 'Handled'}',
-                style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 4),
-            Text(where, style: const TextStyle(fontSize: 16)),
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
@@ -243,8 +262,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Text(text,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 18)),
+            textAlign: TextAlign.center, style: const TextStyle(fontSize: 18)),
       ),
     );
   }
