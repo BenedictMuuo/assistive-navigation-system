@@ -54,6 +54,7 @@ android {
         release {
             // Uses the upload key when key.properties exists, otherwise the debug key.
             signingConfig = keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
 }
