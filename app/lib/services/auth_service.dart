@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -60,7 +62,35 @@ class AuthService {
     await _profileRef(uid).update({'caregiverEmail': normaliseEmail(email)});
   }
 
-  Future<void> signOut() => _auth.signOut();
+  /// Signs out, but never while something is still waiting to be sent.
+  ///
+  /// An SOS sent with no internet waits on the phone and is uploaded when
+  /// the connection returns, under the account that is signed in at that
+  /// moment. If the user signed out first, the upload would run as the next
+  /// account, the security rules would reject it, and the alert would be
+  /// lost. So this first waits up to [wait] for everything to be sent.
+  ///
+  /// Returns true if signed out. Returns false, and stays signed in, if
+  /// something is still waiting, which means the phone is offline.
+  Future<bool> signOut({Duration wait = const Duration(seconds: 5)}) async {
+    try {
+      await _db.waitForPendingWrites().timeout(wait);
+    } on TimeoutException {
+      return false;
+    }
+    await _auth.signOut();
+    return true;
+  }
+
+  /// Shown when [signOut] refuses.
+  static const String unsentWarning =
+      'An SOS or another change is still waiting to be sent. '
+      'Stay signed in until the phone is back online, then try again.';
+
+  /// The same message for text-to-speech, which reads "SOS" as a word.
+  static const String unsentWarningSpoken =
+      'An S O S or another change is still waiting to be sent. '
+      'Stay signed in until the phone is back online, then try again.';
 
   /// Turns Firebase's error codes into something a person can act on.
   static String explain(Object error) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
+import '../services/speech_service.dart';
 import '../theme.dart';
 import '../widgets/big_button.dart';
 
@@ -20,13 +21,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _caregiver =
       TextEditingController(text: widget.profile.caregiverEmail ?? '');
 
+  final SpeechService _speech = SpeechService();
+
   bool _busy = false;
+  bool _signingOut = false;
   String? _message;
   bool _messageIsError = false;
 
   @override
+  void initState() {
+    super.initState();
+    _speech.init();
+  }
+
+  @override
   void dispose() {
     _caregiver.dispose();
+    _speech.stop();
     super.dispose();
   }
 
@@ -65,8 +76,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _signOut() async {
-    Navigator.of(context).popUntil((route) => route.isFirst);
-    await widget.auth.signOut();
+    setState(() => _signingOut = true);
+    final signedOut = await widget.auth.signOut();
+    if (!mounted) return;
+    if (signedOut) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
+    }
+    setState(() => _signingOut = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 8),
+        content: Text(AuthService.unsentWarning,
+            style: TextStyle(fontSize: 18)),
+      ),
+    );
+    await _speech.say(AuthService.unsentWarningSpoken);
   }
 
   @override
@@ -126,11 +151,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: const TextStyle(fontSize: 16)),
             const SizedBox(height: 12),
             BigButton(
-              label: 'Sign out',
+              label: _signingOut ? 'Signing out…' : 'Sign out',
               colour: Colors.black87,
               height: 64,
               fontSize: 20,
-              onPressed: _signOut,
+              onPressed: _signingOut ? null : _signOut,
             ),
           ],
         ),

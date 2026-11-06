@@ -105,6 +105,21 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
     }
   }
 
+  /// The caregiver's "Mark handled" taps can also be waiting to be sent,
+  /// so sign-out checks first, the same as for the user.
+  Future<void> _signOut() async {
+    final signedOut = await widget.auth.signOut();
+    if (signedOut || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 8),
+        content: Text(AuthService.unsentWarning,
+            style: TextStyle(fontSize: 18)),
+      ),
+    );
+    await _speech.say(AuthService.unsentWarningSpoken);
+  }
+
   Future<void> _acknowledge(SosAlert alert) async {
     try {
       await _service.acknowledge(alert.id);
@@ -133,7 +148,7 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
         foregroundColor: Colors.white,
         actions: [
           TextButton(
-            onPressed: widget.auth.signOut,
+            onPressed: _signOut,
             child: const Text('Sign out',
                 style: TextStyle(color: Colors.white, fontSize: 16)),
           ),
