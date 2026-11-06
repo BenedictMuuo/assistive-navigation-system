@@ -1,0 +1,2 @@
+-dontwarn org.tensorflow.lite.gpu.**
+-keep class org.tensorflow.lite.** { *; }
