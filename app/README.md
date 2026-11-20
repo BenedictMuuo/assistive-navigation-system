@@ -1,13 +1,13 @@
 # Mobile application
 
-Flutter app for the user and the caregiver. Not started yet — see milestone
-**M2 - Mobile app shell**.
+Flutter app for the user and the caregiver.
 
-Will contain:
+- Authentication and caregiver pairing (Firebase Authentication)
+- Live camera screen running the CNN on the device (TensorFlow Lite)
+- Distance from the wearable sensor over Bluetooth Low Energy, with risk-graded
+  voice and vibration alerts
+- SOS button with a five-second countdown and the user's location
+- Caregiver alert list with a map link and "Mark handled"
 
-- Authentication and caregiver pairing
-- Live camera screen running the CNN on device
-- SOS button with location
-- Caregiver alert list
-
+Setup, run, test and release steps are in the [main README](../README.md).
 Firebase configuration files are deliberately excluded from version control.

@@ -52,14 +52,17 @@ frame, including empty corridors.
 
 ## Current status
 
+All six stages are complete. The version that was tested and demonstrated is
+release [**v1.0.0**](../../releases/tag/v1.0.0).
+
 | Stage | Work | State |
 |-------|------|-------|
 | 1 | CNN model — dataset, training, evaluation, export | Done |
-| 2 | Mobile app shell — authentication, screens, SOS | Not started |
-| 3 | On-device inference — camera stream, speech output | Not started |
-| 4 | Sensor unit — ESP32, Bluetooth link, risk rules | Not started |
-| 5 | Testing and evaluation | Not started |
-| 6 | Final build and documentation | Not started |
+| 2 | Mobile app shell — authentication, screens, SOS | Done |
+| 3 | On-device inference — camera stream, speech output | Done |
+| 4 | Sensor unit — ESP32, Bluetooth link, risk rules | Done |
+| 5 | Testing and evaluation | Done |
+| 6 | Final build and documentation | Done |
 
 Progress is tracked in this repository's
 [milestones](../../milestones) and [issues](../../issues).
@@ -113,16 +116,79 @@ Dataset sources and licences are documented in
 
 ---
 
+## Setting up
+
+You need Flutter 3.24 (Dart 3.5), the Android SDK, Arduino IDE 2 with the
+"esp32 by Espressif Systems" board package, and the Firebase CLI.
+
+**1. Firebase.** Create a Firebase project with Email/Password sign-in and
+Cloud Firestore turned on. The config files are not committed, because this
+repository is public. Sign in with `firebase login`, then from the `app` folder
+run:
+
+```bash
+flutterfire configure --project=<your-firebase-project> --platforms=android
+```
+
+That generates `lib/firebase_options.dart` and `android/app/google-services.json`.
+Then deploy the security rules from the `firebase` folder:
+
+```bash
+cd firebase
+firebase deploy --only firestore:rules --project <your-firebase-project>
+```
+
+**2. Sensor unit.** Wire and upload the firmware as described in
+[`firmware/README.md`](firmware/README.md). Set `SIMULATION` to `false` before
+uploading to the real board.
+
+## Running the app
+
+Connect an Android phone (Android 8.0 or later, with Bluetooth) by USB, then:
+
+```bash
+cd app
+flutter pub get
+flutter run --release
+```
+
+Sign in, start navigation and point the camera at an object. With the sensor
+unit switched on, the app says "Distance sensor connected." Without it, the app
+carries on with camera-only warnings.
+
+## Testing
+
+```bash
+cd app
+flutter analyze
+flutter test
+```
+
+The 53 unit tests in `app/test` cover the prediction smoother, the
+announcement rules, the distance bands, the risk table and alert rules, the
+Bluetooth message parser and the data models.
+
+## Deployment
+
+The app is released as a signed APK on the
+[releases page](../../releases). To install it, download the APK on the phone
+and allow installation from an unknown source when asked. Each release lists a
+SHA-256 checksum of the APK.
+
+Releases are built from `main` on Windows with two PowerShell scripts:
+
+```powershell
+.\scripts\setup_signing.ps1            # once: creates the upload key and key.properties
+.\scripts\release.ps1 -Version 1.0.0   # tests, builds, signs, checks and publishes
+```
+
+`release.ps1` stops unless `main` is clean and up to date. The signing key,
+`key.properties` and the Firebase config files are never committed.
+
+To roll back, uninstall the app and install the APK of the previous release,
+and redeploy `firebase/firestore.rules` from the matching tag.
+
 ## Development workflow
 
 Branch naming, commit message format and the pull request process are set out
 in [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-## Firebase setup
-
-The Firebase config files are not committed, because this repository is public. To build the app, sign in with `firebase login` and run this from the `app` folder:
-
-```n flutterfire configure --project=assistive-navigation-8c5ad --platforms=android
-```
-
-That regenerates `lib/firebase_options.dart` and `android/app/google-services.json`.
